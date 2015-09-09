@@ -1,7 +1,35 @@
 var path = require('path');
 var archive = require('../helpers/archive-helpers');
-// require more modules/folders here!
+var httpHelpers = require('./http-helpers.js');
+var urlParser = require('url');
+
+var actions = {
+  'GET': function(req, res) {
+    var parts = urlParser.parse(req.url);
+    var asset = parts.pathname;
+
+    if (asset === '/') {
+      asset = '/index.html';
+    }
+
+    if (asset.indexOf('.') === -1) {
+      res.writeHead(404);
+      res.end('Bad url: ' + asset);
+    }
+  },
+
+  'POST': function(req, res) {
+
+  }
+};
 
 exports.handleRequest = function (req, res) {
-  res.end(archive.paths.list);
+  var action = actions[req.method];
+
+  if (action) {
+    action(req, res);
+  } else {
+    res.writeHead(404);
+    res.end("Server doesn't support method: " + req.method);
+  }
 };
