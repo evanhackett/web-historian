@@ -15,7 +15,14 @@ var actions = {
     if (asset.indexOf('.') === -1) {
       res.writeHead(404);
       res.end('Bad url: ' + asset);
+      return;
     }
+
+    httpHelpers.serveAssets(res, asset, function(data) {
+      res.writeHead(200);
+      res.end(data);
+    });
+
   },
 
   'POST': function(req, res) {
