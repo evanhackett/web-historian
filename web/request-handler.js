@@ -34,7 +34,11 @@ var actions = {
 
   'POST': function(req, res) {
     httpHelpers.collectData(req, function(data) {
-      var url = data.split('=')[1];
+      // var url = data.split('=')[1];
+      // var url = data.url;
+      var url = data.split(':')[1].slice(1, -2);
+      console.log("data: " + data);
+      console.log("url: " + url);
       archive.isUrlInList(url, function(found) {
         if (found) {
           archive.isUrlArchived(url, function(exists) {
