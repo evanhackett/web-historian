@@ -1,127 +1,152 @@
 var expect = require('chai').expect;
-var handler = require("../web/request-handler");
-var stubs = require("./stubs/stubs");
+var server = require("../web/basic-server.js");
 var fs = require('fs');
 var archive = require("../helpers/archive-helpers");
 var path = require('path');
-var res;
+var supertest = require('supertest');
 
 archive.initialize({
-  list : path.join(__dirname, "/testdata/sites.txt")
+  list: path.join(__dirname, "/testdata/sites.txt")
 });
 
-// Conditional async testing, akin to Jasmine's waitsFor()
-var waitForThen = function(test, cb) {
-  setTimeout(function() {
-    test() ? cb.apply(this) : waitForThen(test, cb);
-  }, 5);
-};
+var request = supertest.agent(server);
 
-beforeEach(function(){
-  res = new stubs.Response();
+describe("server", function() {
+  describe("GET /", function () {
+    it("should return the content of index.html", function (done) {
+      // just assume that if it contains an <input> tag its index.html
+      request
+        .get('/')
+        .expect(200, /<input/, done);
+    });
+  });
+
+  describe("archived websites", function () {
+    describe("GET", function () {
+      it("should return the content of a website from the archive", function (done) {
+        var fixtureName = "www.google.com";
+        var fixturePath = archive.paths.archivedSites + "/" + fixtureName;
+
+        // Create or clear the file.
+        var fd = fs.openSync(fixturePath, "w");
+        fs.writeSync(fd, "google");
+        fs.closeSync(fd);
+
+        // Write data to the file.
+        fs.writeFileSync(fixturePath, "google");
+
+        request
+          .get("/" + fixtureName)
+          .expect(200, /google/, function (err) {
+            fs.unlinkSync(fixturePath);
+            done(err);
+          });
+      });
+
+      it("Should 404 when asked for a nonexistent file", function(done) {
+        request.get('/arglebargle').expect(404, done);
+      });
+    });
+
+    describe("POST", function () {
+      it("should append submitted sites to 'sites.txt'", function(done) {
+        var url = "www.example.com";
+
+        // Reset the test file and process request
+        fs.closeSync(fs.openSync(archive.paths.list, "w"));
+
+        request
+          .post("/")
+          .send({ url: url })
+          .expect(302, function (err) {
+            if (!err) {
+              var fileContents = fs.readFileSync(archive.paths.list, 'utf8');
+              expect(fileContents).to.equal(url + "\n");
+            }
+
+            done(err);
+          });
+      });
+    });
+  });
 });
 
-describe("Node Server Request Listener Function", function() {
+describe("archive helpers", function(){
+  describe("#readListOfUrls", function () {
+    it("should read urls from sites.txt", function (done){
+      var urlArray = ["example1.com", "example2.com"];
+      fs.writeFileSync(archive.paths.list, urlArray.join("\n"));
 
-  it("Should answer GET requests for /", function(done) {
-    var req = new stubs.Request("/", "GET");
-
-    handler.handleRequest(req, res);
-
-    waitForThen(
-      function() { return res._ended; },
-      function(){
-        expect(res._responseCode).to.equal(200);
-        expect(res._data.toString().match(/<input/)).to.be.ok; // the resulting html should have an input tag
+      archive.readListOfUrls(function(urls){
+        expect(urls).to.deep.equal(urlArray);
         done();
+      });
     });
   });
 
-  it("Should answer GET requests for archived websites", function(done) {
-    var fixtureName = "www.google.com";
-    var fixturePath = archive.paths.archivedSites + "/" + fixtureName;
+  describe("#isUrlInList", function () {
+    it("should check if a url is in the list", function (done) {
+      var urlArray = ["example1.com", "example2.com"];
+      fs.writeFileSync(archive.paths.list, urlArray.join("\n"));
 
-    // Create or clear the file.
-    var fd = fs.openSync(fixturePath, "w");
-    fs.closeSync(fd);
+      var counter = 0;
+      var total = 2;
 
-    // Write data to the file.
-    fs.writeFileSync(fixturePath, "google");
+      archive.isUrlInList("example1.com", function (is) {
+        expect(is);
+        if (++counter == total) { done() }
+      });
 
-    // Request it back.
-    var req = new stubs.Request("/" + fixtureName, "GET");
-    handler.handleRequest(req, res);
+      archive.isUrlInList("gibberish", function (is) {
+        expect(!is);
+        if (++counter == total) { done() }
+      });
+    });
+  });
 
-    waitForThen(
-      function() { return res._ended; },
-      function(){
-        expect(res._responseCode).to.equal(200);
-        expect(res._data.toString().match(/google/)).to.be.ok; // the resulting html should have the text "google"
+  describe("#addUrlToList", function () {
+    it("should add a url to the list", function (done) {
+      var urlArray = ["example1.com", "example2.com\n"];
+      fs.writeFileSync(archive.paths.list, urlArray.join("\n"));
 
-        // Delete the file from the archives.
-        fs.unlinkSync(fixturePath);
+      archive.addUrlToList("someurl.com", function () {
+        archive.isUrlInList("someurl.com", function (is) {
+          expect(is);
+          done();
+        });
+      });
+    });
+  });
+
+  describe("#isUrlArchived", function () {
+    it("should check if a url is archived", function (done) {
+      fs.writeFileSync(archive.paths.archivedSites + "/www.example.com", "blah blah");
+
+      var counter = 0;
+      var total = 2;
+
+      archive.isUrlArchived("www.example.com", function (exists) {
+        expect(exists);
+        if (++counter == total) { done() }
+      });
+
+      archive.isUrlArchived("www.notarchived.com", function (exists) {
+        expect(!exists);
+        if (++counter == total) { done() }
+      });
+    });
+  });
+
+  describe("#downloadUrls", function () {
+    it("should download all pending urls in the list", function (done) {
+      var urlArray = ["www.example.com", "www.google.com"];
+      archive.downloadUrls(urlArray);
+
+      // Ugly hack to wait for all downloads to finish.
+      setTimeout(function () {
+        expect(fs.readdirSync(archive.paths.archivedSites)).to.deep.equal(urlArray);
         done();
+      }, 25);
     });
   });
-
-  it("Should append submitted sites to 'sites.txt'", function(done) {
-    var url = "www.example.com";
-    var req = new stubs.Request("/", "POST", {url: url});
-
-    // Reset the test file and process request
-    fs.writeFileSync(archive.paths.list, "");
-    handler.handleRequest(req, res);
-
-    waitForThen(
-      function() { return res._ended; },
-      function(){
-        var fileContents = fs.readFileSync(archive.paths.list, 'utf8');
-        expect(res._responseCode).to.equal(302);
-        expect(fileContents).to.equal(url + "\n");
-        done();
-    });
-  });
-
-  it("Should 404 when asked for a nonexistent file", function(done) {
-    var req = new stubs.Request("/arglebargle", "GET");
-
-    handler.handleRequest(req, res);
-
-    waitForThen(
-      function() { return res._ended; },
-      function(){
-        expect(res._responseCode).to.equal(404);
-        done();
-    });
-  });
-
-});
-
-describe("html fetcher helpers", function(){
-
-  it("should have a 'readListOfUrls' function", function(){
-    expect(typeof archive.readListOfUrls).to.equal('function');
-  });
-
-  it("should read urls from sites.txt", function(done){
-    var urlArray = ["example1.com", "example2.com"];
-    var resultArray;
-
-    fs.writeFileSync(archive.paths.list, urlArray.join("\n"));
-    archive.readListOfUrls(function(urls){
-      resultArray = urls;
-    });
-
-    waitForThen(
-      function() { return resultArray; },
-      function(){
-        expect(resultArray).to.deep.equal(urlArray);
-        done();
-    });
-  });
-
-  it("should have a 'downloadUrls' function", function(){
-    expect(typeof archive.downloadUrls).to.equal('function');
-  });
-
 });
