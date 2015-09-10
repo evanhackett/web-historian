@@ -36,7 +36,7 @@ exports.addUrlToList = function(url, callback){
   });
 };
 
-exports.isURLArchived = function(url, callback){
+exports.isUrlArchived = function(url, callback){
   url = '/' + url;
   fs.exists(exports.paths.archivedSites + url, function(exists){
     callback(exists);

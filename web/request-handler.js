@@ -19,6 +19,13 @@ var actions = {
     }
 
     httpHelpers.serveAssets(res, asset, function(data) {
+      archive.isUrlInList(asset.slice(1), function(found) {
+        if (found) {
+          httpHelpers.sendRedirect(res, '/loading.html');
+        } else {
+          httpHelpers.sendResponse(res, '404: Page not found', 404);
+        }
+      });
       res.writeHead(200);
       res.end(data);
     });

@@ -12,16 +12,25 @@ exports.headers = headers = {
 
 // helper function to serve static files
 exports.serveAssets = function(res, asset, callback) {
-  var filePath = archive.paths.archivedSites;
+  var encoding = {encoding: "utf8"};
 
-  if (asset === '/index.html' || asset === '/loading.html') {
-    filePath = archive.paths.siteAssets;
-  }
+  fs.readFile(archive.paths.siteAssets + asset, encoding, function(err, data) {
+    if (err) {
+      // check archive folder since file doesn't exist in public folder
+      fs.readFile(archive.paths.archivedSites + asset, encoding, function(err, data) {
+        if (err) {
+          callback ? callback() : exports.sendResponse(res, "404: Page not found", 404);
+        } else {
+          exports.sendResponse(res, data);
+        }
+      });
 
-  fs.readFile(filePath + asset, 'utf8', function(err, data) {
-    callback(data);
+    } else {
+      exports.sendResponse(res, data);
+    }
   });
 };
+
 
 exports.collectData = function(request, callback) {
   var data = "";
@@ -41,7 +50,7 @@ exports.sendResponse = function(res, obj, status) {
 
 exports.sendRedirect = function(res, location, status) {
   status = status || 302;
-  res.writeHead(status, {Location: location});
+  res.writeHead(status, {'Location': location});
   res.end();
 };
 
