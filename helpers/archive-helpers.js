@@ -1,6 +1,7 @@
 var fs = require('fs');
 var path = require('path');
 var _ = require('underscore');
+var request = require('request');
 
 
 exports.paths = {
@@ -43,5 +44,19 @@ exports.isUrlArchived = function(url, callback){
   });
 };
 
-exports.downloadUrls = function(){
+exports.downloadUrls = function(urls){
+  _.each(urls, function(url) {
+    if (!url) {
+      return;
+    }
+    request('http://' + url, function(error, response, body) {
+      if (!error && response.statusCode == 200) {
+        fs.writeFile(exports.paths.archivedSites + '/' + url, body, function(err) {
+          if (err) {
+            console.log("error writing to file");
+          }
+        });
+      }
+    });
+  });
 };
