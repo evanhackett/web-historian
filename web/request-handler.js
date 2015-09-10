@@ -26,7 +26,24 @@ var actions = {
   },
 
   'POST': function(req, res) {
-
+    httpHelpers.collectData(req, function(data) {
+      var url = data.split('=')[1];
+      archive.isUrlInList(url, function(found) {
+        if (found) {
+          archive.isUrlArchived(url, function(exists) {
+            if (exists) {
+              httpHelpers.sendRedirect(res, '/' + url);
+            } else {
+             httpHelpers.sendRedirect(res, '/loading.html');
+            }
+          });
+        } else {
+          archive.addUrlToList(url, function() {
+            httpHelpers.sendRedirect(res, '/loading.html');
+          });
+        }
+      });
+    });
   }
 };
 

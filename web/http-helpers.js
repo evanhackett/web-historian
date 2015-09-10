@@ -22,3 +22,28 @@ exports.serveAssets = function(res, asset, callback) {
     callback(data);
   });
 };
+
+exports.collectData = function(request, callback) {
+  var data = "";
+  request.on("data", function(chunk) {
+    data += chunk;
+  });
+  request.on("end", function() {
+    callback(data);
+  });
+};
+
+exports.sendResponse = function(res, obj, status) {
+  status = status || 200;
+  res.writeHead(status, headers);
+  res.end(obj);
+};
+
+exports.sendRedirect = function(res, location, status) {
+  status = status || 302;
+  res.writeHead(status, {Location: location});
+  res.end();
+};
+
+
+
